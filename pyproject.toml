@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling>=1.0.0", "wheel"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nomyo"
+version = "0.1.0"
+description = "OpenAI-compatible secure chat client with end-to-end encryption for NOMYO Inference Endpoints"
+authors = [
+    {name = "NOMYO.AI", email = "ichi@nomyo.ai"},
+]
+readme = "README.md"
+license = {text = "Apache-2.0"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Communications :: Chat",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "anyio==4.12.0",
+    "certifi==2025.11.12",
+    "cffi==2.0.0",
+    "cryptography==46.0.3",
+    "exceptiongroup==1.3.1",
+    "h11==0.16.0",
+    "httpcore==1.0.9",
+    "httpx==0.28.1",
+    "idna==3.11",
+    "pycparser==2.23",
+    "typing_extensions==4.15.0",
+]
+
+[project.urls]
+Homepage = "https://nomyo.ai"
+Documentation = "https://nomyo.ai/nomyo-docs"
+Repository = "https://github.com/nomyo-ai/nomyo"
+Issues = "https://github.com/nomyo-ai/nomyo/issues"
+
+[tool.setuptools]
+packages = ["nomyo"]
