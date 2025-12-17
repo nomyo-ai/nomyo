@@ -9,7 +9,7 @@ the same interface as OpenAI's ChatCompletion.create() method.
 import asyncio
 from nomyo import SecureChatCompletion
 
-client = SecureChatCompletion(base_url="http://localhost:12434")
+client = SecureChatCompletion(base_url="http://localhost:12434", allow_http=True)
 
 async def test_basic_chat():
     """Test basic chat completion with OpenAI-style API."""

@@ -37,16 +37,17 @@ class SecureChatCompletion:
         ```
     """
 
-    def __init__(self, base_url: str = "http://api.nomyo.ai:12434"):
+    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False):
         """
         Initialize the secure chat completion client.
 
         Args:
-            base_url: Base URL of the NOMYO Router (e.g., "http://api.nomyo.ai:12434")
+            base_url: Base URL of the NOMYO Router (must use HTTPS for production)
                      This parameter is named 'base_url' for OpenAI compatibility.
+            allow_http: Allow HTTP connections (ONLY for local development, never in production)
         """
 
-        self.client = SecureCompletionClient(router_url=base_url)
+        self.client = SecureCompletionClient(router_url=base_url, allow_http=allow_http)
         self._keys_initialized = False
 
     async def _ensure_keys(self):
