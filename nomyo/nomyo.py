@@ -1,6 +1,6 @@
 import uuid
 from typing import Dict, Any, List, Optional
-from .SecureCompletionClient import SecureCompletionClient
+from .SecureCompletionClient import SecureCompletionClient, APIError, AuthenticationError, InvalidRequestError, APIConnectionError, RateLimitError, ServerError
 
 class SecureChatCompletion:
     """
