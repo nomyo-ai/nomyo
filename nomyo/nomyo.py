@@ -1,5 +1,5 @@
 import uuid
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from .SecureCompletionClient import SecureCompletionClient
 
 class SecureChatCompletion:
@@ -37,7 +37,7 @@ class SecureChatCompletion:
         ```
     """
 
-    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False):
+    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False, api_key: Optional[str] = None):
         """
         Initialize the secure chat completion client.
 
@@ -45,10 +45,13 @@ class SecureChatCompletion:
             base_url: Base URL of the NOMYO Router (must use HTTPS for production)
                      This parameter is named 'base_url' for OpenAI compatibility.
             allow_http: Allow HTTP connections (ONLY for local development, never in production)
+            api_key: Optional API key for bearer authentication. If provided, it will be
+                     used for all requests made with this client.
         """
 
         self.client = SecureCompletionClient(router_url=base_url, allow_http=allow_http)
         self._keys_initialized = False
+        self.api_key = api_key
 
     async def _ensure_keys(self):
         """Ensure keys are loaded or generated."""
@@ -139,10 +142,13 @@ class SecureChatCompletion:
         }
 
         # Generate a unique payload ID
-        payload_id = f"openai-compat-{uuid.uuid4()}"
+        payload_id = f"{uuid.uuid4()}"
+
+        # Use instance's api_key if not overridden in kwargs
+        request_api_key = kwargs.pop("api_key", instance.api_key)
 
         # Send secure request
-        response = await instance.client.send_secure_request(payload, payload_id)
+        response = await instance.client.send_secure_request(payload, payload_id, request_api_key)
 
         return response
 

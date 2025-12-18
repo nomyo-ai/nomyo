@@ -438,13 +438,14 @@ class SecureCompletionClient:
 
         return response
 
-    async def send_secure_request(self, payload: Dict[str, Any], payload_id: str) -> Dict[str, Any]:
+    async def send_secure_request(self, payload: Dict[str, Any], payload_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Send a secure chat completion request to the router.
 
         Args:
             payload: Chat completion request payload
             payload_id: Unique identifier for this request
+            api_key: Optional API key for bearer authentication
 
         Returns:
             Decrypted response from the LLM
@@ -460,6 +461,10 @@ class SecureCompletionClient:
             "X-Public-Key": urllib.parse.quote(self.public_key_pem),
             "Content-Type": "application/octet-stream"
         }
+
+        # Add Authorization header if api_key is provided
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
         # Step 3: Send request to router
         url = f"{self.router_url}/v1/chat/secure_completion"
