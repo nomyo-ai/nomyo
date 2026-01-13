@@ -14,6 +14,17 @@ from .SecureCompletionClient import (
     ServerError
 )
 
+# Import secure memory module if available
+try:
+    from .SecureMemory import (
+        get_memory_protection_info,
+        disable_secure_memory,
+        enable_secure_memory,
+        secure_bytes
+    )
+except ImportError:
+    pass
+
 __all__ = [
     'SecureChatCompletion',
     'APIError',
@@ -21,10 +32,13 @@ __all__ = [
     'InvalidRequestError',
     'APIConnectionError',
     'RateLimitError',
-    'ServerError'
+    'ServerError',
+    'get_memory_protection_info',
+    'disable_secure_memory',
+    'enable_secure_memory',
+    'secure_bytes'
 ]
 
 __version__ = "0.1.0"
 __author__ = "NOMYO AI"
 __license__ = "Apache-2.0"
-__all__ = ["SecureChatCompletion"]

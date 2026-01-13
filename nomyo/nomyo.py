@@ -2,6 +2,13 @@ import uuid
 from typing import Dict, Any, List, Optional
 from .SecureCompletionClient import SecureCompletionClient, APIError, AuthenticationError, InvalidRequestError, APIConnectionError, RateLimitError, ServerError
 
+# Import secure memory module for configuration
+try:
+    from .SecureMemory import get_memory_protection_info, disable_secure_memory, enable_secure_memory
+    _SECURE_MEMORY_AVAILABLE = True
+except ImportError:
+    _SECURE_MEMORY_AVAILABLE = False
+
 class SecureChatCompletion:
     """
     OpenAI-compatible secure chat completion client.
@@ -10,6 +17,12 @@ class SecureChatCompletion:
     method, but automatically encrypts all requests and decrypts all responses
     for secure communication with the NOMYO Router's /v1/chat/secure_completion
     endpoint.
+
+    Security Features:
+    - End-to-end encryption (AES-256-GCM + RSA-OAEP)
+    - Secure memory protection (prevents memory swapping and guarantees zeroing)
+    - HTTPS enforcement (with optional HTTP for local development)
+    - Automatic key management
 
     Usage:
         ```python
@@ -37,7 +50,7 @@ class SecureChatCompletion:
         ```
     """
 
-    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False, api_key: Optional[str] = None):
+    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False, api_key: Optional[str] = None, secure_memory: bool = True):
         """
         Initialize the secure chat completion client.
 
@@ -47,11 +60,30 @@ class SecureChatCompletion:
             allow_http: Allow HTTP connections (ONLY for local development, never in production)
             api_key: Optional API key for bearer authentication. If provided, it will be
                      used for all requests made with this client.
+            secure_memory: Enable secure memory protection (default: True).
+                          When enabled, prevents plaintext payloads from being swapped to disk
+                          and guarantees memory is zeroed after encryption.
+                          Set to False for testing or when security is not required.
         """
 
         self.client = SecureCompletionClient(router_url=base_url, allow_http=allow_http)
         self._keys_initialized = False
         self.api_key = api_key
+
+        # Configure secure memory if available
+        if _SECURE_MEMORY_AVAILABLE:
+            if secure_memory:
+                enable_secure_memory()
+            else:
+                disable_secure_memory()
+        elif secure_memory:
+            import warnings
+            warnings.warn(
+                "Secure memory requested but not available. "
+                "Falling back to standard memory handling.",
+                UserWarning,
+                stacklevel=2
+            )
 
     async def _ensure_keys(self):
         """Ensure keys are loaded or generated."""

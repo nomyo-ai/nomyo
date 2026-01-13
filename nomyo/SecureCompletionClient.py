@@ -9,6 +9,14 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 # Setup module logger
 logger = logging.getLogger(__name__)
 
+# Import secure memory module
+try:
+    from .SecureMemory import secure_bytes, get_memory_protection_info
+    _SECURE_MEMORY_AVAILABLE = True
+except ImportError:
+    _SECURE_MEMORY_AVAILABLE = False
+    logger.warning("SecureMemory module not available, falling back to standard memory handling")
+
 class SecurityError(Exception):
     """Raised when a security violation is detected."""
     pass
@@ -288,6 +296,9 @@ class SecureCompletionClient:
         """
         Encrypt a payload using hybrid encryption (AES-256-GCM + RSA-OAEP).
 
+        This method uses secure memory operations to protect the plaintext payload
+        from being swapped to disk or lingering in memory after encryption.
+
         Args:
             payload: Dictionary containing the chat completion request
 
@@ -318,56 +329,113 @@ class SecureCompletionClient:
 
             logger.debug("Payload size: %d bytes", len(payload_json))
 
-            # Generate cryptographically secure random AES key
-            aes_key = secrets.token_bytes(32)  # 256-bit key
+            # Use secure memory context to protect plaintext payload
+            if _SECURE_MEMORY_AVAILABLE:
+                with secure_bytes(payload_json) as protected_payload:
+                    # Generate cryptographically secure random AES key
+                    aes_key = secrets.token_bytes(32)  # 256-bit key
 
-            # Encrypt payload with AES-GCM using Cipher API (matching server implementation)
-            nonce = secrets.token_bytes(12)  # 96-bit nonce for GCM
-            cipher = Cipher(
-                algorithms.AES(aes_key),
-                modes.GCM(nonce),
-                backend=default_backend()
-            )
-            encryptor = cipher.encryptor()
-            ciphertext = encryptor.update(payload_json) + encryptor.finalize()
-            tag = encryptor.tag
+                    # Encrypt payload with AES-GCM using Cipher API (matching server implementation)
+                    nonce = secrets.token_bytes(12)  # 96-bit nonce for GCM
+                    cipher = Cipher(
+                        algorithms.AES(aes_key),
+                        modes.GCM(nonce),
+                        backend=default_backend()
+                    )
+                    encryptor = cipher.encryptor()
+                    ciphertext = encryptor.update(protected_payload) + encryptor.finalize()
+                    tag = encryptor.tag
 
-            # Fetch server's public key for encrypting the AES key
-            server_public_key_pem = await self.fetch_server_public_key()
+                    # Fetch server's public key for encrypting the AES key
+                    server_public_key_pem = await self.fetch_server_public_key()
 
-            # Encrypt AES key with server's RSA-OAEP
-            server_public_key = serialization.load_pem_public_key(
-                server_public_key_pem.encode('utf-8'),
-                backend=default_backend()
-            )
-            encrypted_aes_key = server_public_key.encrypt(
-                aes_key,
-                padding.OAEP(
-                    mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                    algorithm=hashes.SHA256(),
-                    label=None
+                    # Encrypt AES key with server's RSA-OAEP
+                    server_public_key = serialization.load_pem_public_key(
+                        server_public_key_pem.encode('utf-8'),
+                        backend=default_backend()
+                    )
+                    encrypted_aes_key = server_public_key.encrypt(
+                        aes_key,
+                        padding.OAEP(
+                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                            algorithm=hashes.SHA256(),
+                            label=None
+                        )
+                    )
+
+                    # Create encrypted package
+                    encrypted_package = {
+                        "version": "1.0",
+                        "algorithm": "hybrid-aes256-rsa4096",
+                        "encrypted_payload": {
+                            "ciphertext": base64.b64encode(ciphertext).decode('utf-8'),
+                            "nonce": base64.b64encode(nonce).decode('utf-8'),
+                            "tag": base64.b64encode(tag).decode('utf-8')
+                        },
+                        "encrypted_aes_key": base64.b64encode(encrypted_aes_key).decode('utf-8'),
+                        "key_algorithm": "RSA-OAEP-SHA256",
+                        "payload_algorithm": "AES-256-GCM"
+                    }
+
+                    # Serialize package to JSON and return as bytes
+                    package_json = json.dumps(encrypted_package).encode('utf-8')
+                    logger.debug("Encrypted package size: %d bytes", len(package_json))
+
+                    return package_json
+            else:
+                # Fallback to standard encryption if secure memory not available
+                logger.warning("Secure memory not available, using standard encryption")
+
+                # Generate cryptographically secure random AES key
+                aes_key = secrets.token_bytes(32)  # 256-bit key
+
+                # Encrypt payload with AES-GCM using Cipher API (matching server implementation)
+                nonce = secrets.token_bytes(12)  # 96-bit nonce for GCM
+                cipher = Cipher(
+                    algorithms.AES(aes_key),
+                    modes.GCM(nonce),
+                    backend=default_backend()
                 )
-            )
+                encryptor = cipher.encryptor()
+                ciphertext = encryptor.update(payload_json) + encryptor.finalize()
+                tag = encryptor.tag
 
-            # Create encrypted package
-            encrypted_package = {
-                "version": "1.0",
-                "algorithm": "hybrid-aes256-rsa4096",
-                "encrypted_payload": {
-                    "ciphertext": base64.b64encode(ciphertext).decode('utf-8'),
-                    "nonce": base64.b64encode(nonce).decode('utf-8'),
-                    "tag": base64.b64encode(tag).decode('utf-8')
-                },
-                "encrypted_aes_key": base64.b64encode(encrypted_aes_key).decode('utf-8'),
-                "key_algorithm": "RSA-OAEP-SHA256",
-                "payload_algorithm": "AES-256-GCM"
-            }
+                # Fetch server's public key for encrypting the AES key
+                server_public_key_pem = await self.fetch_server_public_key()
 
-            # Serialize package to JSON and return as bytes
-            package_json = json.dumps(encrypted_package).encode('utf-8')
-            logger.debug("Encrypted package size: %d bytes", len(package_json))
+                # Encrypt AES key with server's RSA-OAEP
+                server_public_key = serialization.load_pem_public_key(
+                    server_public_key_pem.encode('utf-8'),
+                    backend=default_backend()
+                )
+                encrypted_aes_key = server_public_key.encrypt(
+                    aes_key,
+                    padding.OAEP(
+                        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+                        algorithm=hashes.SHA256(),
+                        label=None
+                    )
+                )
 
-            return package_json
+                # Create encrypted package
+                encrypted_package = {
+                    "version": "1.0",
+                    "algorithm": "hybrid-aes256-rsa4096",
+                    "encrypted_payload": {
+                        "ciphertext": base64.b64encode(ciphertext).decode('utf-8'),
+                        "nonce": base64.b64encode(nonce).decode('utf-8'),
+                        "tag": base64.b64encode(tag).decode('utf-8')
+                    },
+                    "encrypted_aes_key": base64.b64encode(encrypted_aes_key).decode('utf-8'),
+                    "key_algorithm": "RSA-OAEP-SHA256",
+                    "payload_algorithm": "AES-256-GCM"
+                }
+
+                # Serialize package to JSON and return as bytes
+                package_json = json.dumps(encrypted_package).encode('utf-8')
+                logger.debug("Encrypted package size: %d bytes", len(package_json))
+
+                return package_json
 
         except ValueError:
             raise  # Re-raise validation errors
