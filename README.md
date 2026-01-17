@@ -63,12 +63,21 @@ python3 test.py
 - **Optional persistence**: Keys can be saved to `client_keys/` directory for reuse across sessions
 - **Password protection**: Optional password encryption for private keys (recommended for production)
 - **Secure permissions**: Private keys stored with restricted permissions (600 - owner-only access)
-- **Secure memory protection**: Plaintext payloads protected from disk swapping and memory lingering### Secure Memory Protection
+- **Secure memory protection**: Plaintext payloads protected from disk swapping and memory lingering
+
+### Secure Memory Protection
+
+### Ephemeral AES Keys
+
+- **Per-request encryption keys**: A unique AES-256 key is generated for each request
+- **Automatic rotation**: AES keys are never reused - a fresh key is created for every encryption operation
+- **Forward secrecy**: Compromise of one AES key only affects that single request
+- **Secure generation**: AES keys are generated using cryptographically secure random number generation (`secrets.token_bytes`)
+- **Automatic cleanup**: AES keys are zeroed from memory immediately after use
 - **Automatic protection**: Plaintext payloads are automatically protected during encryption
 - **Prevents memory swapping**: Sensitive data cannot be swapped to disk
 - **Guaranteed zeroing**: Memory is zeroed after encryption completes
 - **Fallback mechanism**: Graceful degradation if SecureMemory module unavailable
-- **Configurable**: Can be disabled with `secure_memory=False` parameter (not recommended)
 
 ## 🔄 OpenAI Compatibility
 
