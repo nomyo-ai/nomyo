@@ -63,7 +63,6 @@ python3 test.py
 - **Optional persistence**: Keys can be saved to `client_keys/` directory for reuse across sessions
 - **Password protection**: Optional password encryption for private keys (recommended for production)
 - **Secure permissions**: Private keys stored with restricted permissions (600 - owner-only access)
-- **Secure memory protection**: Plaintext payloads protected from disk swapping and memory lingering
 
 ### Secure Memory Protection
 

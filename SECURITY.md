@@ -25,6 +25,7 @@ HTTP connections are vulnerable to man-in-the-middle attacks where an attacker c
 ### 2. Protect Private Keys
 
 **Password Protection:**
+
 ```python
 # Generate keys with password protection
 await client.generate_keys(save_to_file=True, password="strong_password_here")
@@ -34,6 +35,7 @@ await client.load_keys("client_keys/private_key.pem", password="strong_password_
 ```
 
 **File Permissions:**
+
 - Private keys are automatically saved with 0600 permissions (owner read/write only)
 - Never commit private keys to version control
 - Add `client_keys/` to your `.gitignore`
@@ -41,10 +43,12 @@ await client.load_keys("client_keys/private_key.pem", password="strong_password_
 ### 3. Key Management
 
 **Key Rotation:**
+
 - Regularly rotate RSA key pairs (recommended: every 90 days)
 - Generate new keys when changing environments (dev → staging → production)
 
 **Key Storage:**
+
 - Store keys outside the project directory in production
 - Use environment variables or secrets management systems
 - Never hardcode keys in source code
@@ -80,7 +84,8 @@ This will display warnings but allow the connection to proceed.
 ## Reporting Security Issues
 
 Report security vulnerabilities responsibly:
-- Do NOT create public GitHub issues
-- Contact: security@nomyo.ai
+
+- Do **NOT** create public GitHub issues, use "Report a vulnerability" function in Github instead!
+- Contact: ichi@nomyo.ai
 - Include detailed vulnerability information
-- Allow time for remediation before disclosure
+- Allow time for remediation before disclosure. Thank you.
