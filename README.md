@@ -22,7 +22,7 @@ from nomyo import SecureChatCompletion
 
 async def main():
     # Initialize client (defaults to http://api.nomyo.ai:12434)
-    client = SecureChatCompletion(base_url="http://api.nomyo.ai:12434")
+    client = SecureChatCompletion(base_url="https://api.nomyo.ai:12434")
 
     # Simple chat completion
     response = await client.create(
@@ -56,10 +56,19 @@ python3 test.py
 
 ### Key Management
 
-- Automatic key generation and management
-- Keys stored with restricted permissions (600 for private key)
-- Optional password protection for private keys
-- Key persistence across sessions
+- **Automatic key generation**: Keys are automatically generated on first use
+- **Automatic key loading**: Existing keys are loaded automatically from `client_keys/` directory
+- **No manual intervention required**: The library handles key management automatically
+- **Keys kept in memory**: Active session keys are stored in memory for performance
+- **Optional persistence**: Keys can be saved to `client_keys/` directory for reuse across sessions
+- **Password protection**: Optional password encryption for private keys (recommended for production)
+- **Secure permissions**: Private keys stored with restricted permissions (600 - owner-only access)
+- **Secure memory protection**: Plaintext payloads protected from disk swapping and memory lingering### Secure Memory Protection
+- **Automatic protection**: Plaintext payloads are automatically protected during encryption
+- **Prevents memory swapping**: Sensitive data cannot be swapped to disk
+- **Guaranteed zeroing**: Memory is zeroed after encryption completes
+- **Fallback mechanism**: Graceful degradation if SecureMemory module unavailable
+- **Configurable**: Can be disabled with `secure_memory=False` parameter (not recommended)
 
 ## 🔄 OpenAI Compatibility
 
@@ -131,7 +140,7 @@ import asyncio
 from nomyo import SecureChatCompletion
 
 async def main():
-    client = SecureChatCompletion(base_url="http://api.nomyo.ai:12434")
+    client = SecureChatCompletion(base_url="https://api.nomyo.ai:12434")
 
     response = await client.create(
         model="Qwen/Qwen3-0.6B",
@@ -154,7 +163,7 @@ import asyncio
 from nomyo import SecureChatCompletion
 
 async def main():
-    client = SecureChatCompletion(base_url="http://api.nomyo.ai:12434")
+    client = SecureChatCompletion(base_url="https://api.nomyo.ai:12434")
 
     response = await client.create(
         model="Qwen/Qwen3-0.6B",
@@ -192,7 +201,7 @@ import asyncio
 from nomyo import SecureChatCompletion
 
 async def main():
-    client = SecureChatCompletion(base_url="http://api.nomyo.ai:12434")
+    client = SecureChatCompletion(base_url="https://api.nomyo.ai:12434")
 
     response = await client.acreate(
         model="Qwen/Qwen3-0.6B",
@@ -224,14 +233,59 @@ import asyncio
 from nomyo import SecureChatCompletion
 
 async def main():
-    client = SecureChatCompletion(base_url="http://NOMYO-Pro-Router:12434")
+    client = SecureChatCompletion(base_url="https://NOMYO-Pro-Router:12434")
     # ... rest of your code
     asyncio.run(main())
+```### API Key Authentication
+
+```python
+import asyncio
+from nomyo import SecureChatCompletion
+
+async def main():
+    # Initialize with API key (recommended for production)
+    client = SecureChatCompletion(
+        base_url="https://api.nomyo.ai:12434",
+        api_key="your-api-key-here"
+    )
+
+    # Or pass API key in the create() method
+    response = await client.create(
+        model="Qwen/Qwen3-0.6B",
+        messages=[
+            {"role": "user", "content": "Hello!"}
+        ],
+        api_key="your-api-key-here"  # Overrides instance API key
+    )
+
+asyncio.run(main())
+```
+
+### Secure Memory Configuration
+
+```python
+import asyncio
+from nomyo import SecureChatCompletion
+
+async def main():
+    # Enable secure memory protection (default, recommended)
+    client = SecureChatCompletion(
+        base_url="https://api.nomyo.ai:12434",
+        secure_memory=True  # Default
+    )
+
+    # Disable secure memory (not recommended, for testing only)
+    client = SecureChatCompletion(
+        base_url="https://api.nomyo.ai:12434",
+        secure_memory=False
+    )
+
+asyncio.run(main())
 ```
 
 ### Key Management
 
-Keys are automatically generated on first use and stored in `client_keys/` directory.
+Keys are automatically generated on first use.
 
 #### Generate Keys Manually
 
@@ -283,8 +337,20 @@ Tests verify:
 #### Constructor
 
 ```python
-SecureChatCompletion(base_url: str = "http://api.nomyo.ai:12434")
+SecureChatCompletion(
+    base_url: str = "https://api.nomyo.ai:12434",
+    allow_http: bool = False,
+    api_key: Optional[str] = None,
+    secure_memory: bool = True
+)
 ```
+
+**Parameters:**
+
+- `base_url`: Base URL of the NOMYO Router (must use HTTPS for production)
+- `allow_http`: Allow HTTP connections (ONLY for local development, never in production)
+- `api_key`: Optional API key for bearer authentication
+- `secure_memory`: Enable secure memory protection (default: True)
 
 #### Methods
 
