@@ -120,6 +120,12 @@ class SecureChatCompletion:
                 - logit_bias: Dict[str, float]
                 - user: str
                 - base_url: str (alternative to initializing with router_url)
+                - security_tier: str ("standard", "high", or "maximum")
+                    Controls hardware routing and security level:
+                    * "standard": general secure inference
+                    * "high": sensitive business data
+                    * "maximum": maximum isolation (PHI, classified data)
+                    If not specified, server uses default based on model name mapping.
 
         Returns:
             A dictionary containing the chat completion response with the following structure:
@@ -153,6 +159,9 @@ class SecureChatCompletion:
         """
         # Extract base_url if provided (OpenAI compatibility)
         base_url = kwargs.pop("base_url", None)
+        
+        # Extract security_tier if provided
+        security_tier = kwargs.pop("security_tier", None)
 
         # Use the instance's client unless base_url is explicitly overridden
         if base_url is not None:
@@ -179,8 +188,8 @@ class SecureChatCompletion:
         # Use instance's api_key if not overridden in kwargs
         request_api_key = kwargs.pop("api_key", instance.api_key)
 
-        # Send secure request
-        response = await instance.client.send_secure_request(payload, payload_id, request_api_key)
+        # Send secure request with security tier
+        response = await instance.client.send_secure_request(payload, payload_id, request_api_key, security_tier)
 
         return response
 

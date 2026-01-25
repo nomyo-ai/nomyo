@@ -616,7 +616,7 @@ class SecureCompletionClient:
 
         return response
 
-    async def send_secure_request(self, payload: Dict[str, Any], payload_id: str, api_key: Optional[str] = None) -> Dict[str, Any]:
+    async def send_secure_request(self, payload: Dict[str, Any], payload_id: str, api_key: Optional[str] = None, security_tier: Optional[str] = None) -> Dict[str, Any]:
         """
         Send a secure chat completion request to the router.
 
@@ -624,6 +624,12 @@ class SecureCompletionClient:
             payload: Chat completion request payload
             payload_id: Unique identifier for this request
             api_key: Optional API key for bearer authentication
+            security_tier: Optional security tier for routing ("standard", "high", or "maximum").
+                          Controls hardware preference:
+                          - "standard": general secure inference
+                          - "high": sensitive business data
+                          - "maximum": maximum isolation (PHI, classified data)
+                          If not specified, server uses default based on model name mapping.
 
         Returns:
             Decrypted response from the LLM
@@ -634,8 +640,18 @@ class SecureCompletionClient:
             APIError: For other HTTP errors
             APIConnectionError: If connection fails
             SecurityError: If encryption/decryption fails
+            ValueError: If security_tier is invalid
         """
         logger.info("Sending secure chat completion request...")
+
+        # Validate security tier if provided
+        if security_tier is not None:
+            valid_tiers = ["standard", "high", "maximum"]
+            if security_tier not in valid_tiers:
+                raise ValueError(
+                    f"Invalid security_tier: '{security_tier}'. "
+                    f"Must be one of: {', '.join(valid_tiers)}"
+                )
 
         # Step 1: Encrypt the payload
         encrypted_payload = await self.encrypt_payload(payload)
@@ -650,6 +666,10 @@ class SecureCompletionClient:
         # Add Authorization header if api_key is provided
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
+
+        # Add Security-Tier header if security_tier is provided
+        if security_tier:
+            headers["X-Security-Tier"] = security_tier
 
         # Step 3: Send request to router
         url = f"{self.router_url}/v1/chat/secure_completion"
