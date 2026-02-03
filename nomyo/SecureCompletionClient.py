@@ -754,8 +754,13 @@ class SecureCompletionClient:
 
                 else:
                     # Unexpected status code
+                    unexp_detail = response.json()
+                    if not isinstance(unexp_detail, dict):
+                        unexp_detail = {"detail": "unknown"}
+                    if isinstance(unexp_detail, dict) and "detail" not in unexp_detail.keys():
+                        unexp_detail["detail"] = "unknown"
                     raise APIError(
-                        f"Unexpected status code: {response.status_code}",
+                        f"Unexpected status code: {response.status_code} {unexp_detail['detail']}",
                         status_code=response.status_code
                     )
 

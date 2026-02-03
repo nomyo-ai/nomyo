@@ -50,7 +50,7 @@ class SecureChatCompletion:
         ```
     """
 
-    def __init__(self, base_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False, api_key: Optional[str] = None, secure_memory: bool = True):
+    def __init__(self, base_url: str = "https://api.nomyo.ai", allow_http: bool = False, api_key: Optional[str] = None, secure_memory: bool = True):
         """
         Initialize the secure chat completion client.
 
