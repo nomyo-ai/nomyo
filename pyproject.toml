@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nomyo"
-version = "0.1.0"
+version = "0.1.1"
 description = "OpenAI-compatible secure chat client with end-to-end encryption for NOMYO Inference Endpoints"
 authors = [
     {name = "NOMYO.AI", email = "ichi@nomyo.ai"},
@@ -44,7 +44,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://nomyo.ai"
-Documentation = "https://nomyo.ai/nomyo-docs"
+Documentation = "https://github.com/nomyo-ai/nomyo/doc"
 Repository = "https://github.com/nomyo-ai/nomyo"
 Issues = "https://github.com/nomyo-ai/nomyo/issues"
 

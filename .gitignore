@@ -28,6 +28,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+.claude/
 
 # IDE
 .idea/
@@ -49,6 +50,7 @@ build/
 dist/
 *.egg-info/
 *.egg
+*.sh
 
 # Virtual environments
 venv/
