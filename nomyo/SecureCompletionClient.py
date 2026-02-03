@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 # Import secure memory module
 try:
-    from .SecureMemory import secure_bytes, get_memory_protection_info
+    from .SecureMemory import secure_bytearray, get_memory_protection_info, _get_secure_memory
     _SECURE_MEMORY_AVAILABLE = True
 except ImportError:
     _SECURE_MEMORY_AVAILABLE = False
@@ -115,9 +115,9 @@ class SecureCompletionClient:
             # Note: This is best-effort as the cryptography library
             # maintains its own internal key material
             import pickle
-            key_data = pickle.dumps(self.private_key)
-            from .SecureMemory import _secure_memory
-            locked = _secure_memory.lock_memory(key_data)
+            key_data = bytearray(pickle.dumps(self.private_key))
+            secure_memory = _get_secure_memory()
+            locked = secure_memory.lock_memory(key_data)
             if locked:
                 logger.debug("Private key locked in memory (best effort)")
             else:
@@ -369,22 +369,22 @@ class SecureCompletionClient:
 
             # Use secure memory context to protect plaintext payload
             if _SECURE_MEMORY_AVAILABLE:
-                with secure_bytes(payload_json) as protected_payload:
+                with secure_bytearray(payload_json) as protected_payload:
                     # Generate cryptographically secure random AES key
                     aes_key = secrets.token_bytes(32)  # 256-bit key
 
                     try:
                         # Protect AES key in memory
-                        with secure_bytes(bytearray(aes_key)) as protected_aes_key:
+                        with secure_bytearray(aes_key) as protected_aes_key:
                             # Encrypt payload with AES-GCM using Cipher API
                             nonce = secrets.token_bytes(12)  # 96-bit nonce for GCM
                             cipher = Cipher(
-                                algorithms.AES(bytes(protected_aes_key)),
+                                algorithms.AES(bytes(protected_aes_key.data)),
                                 modes.GCM(nonce),
                                 backend=default_backend()
                             )
                             encryptor = cipher.encryptor()
-                            ciphertext = encryptor.update(protected_payload) + encryptor.finalize()
+                            ciphertext = encryptor.update(bytes(protected_payload.data)) + encryptor.finalize()
                             tag = encryptor.tag
 
                             # Fetch server's public key for encrypting the AES key
@@ -396,7 +396,7 @@ class SecureCompletionClient:
                                 backend=default_backend()
                             )
                             encrypted_aes_key = server_public_key.encrypt(
-                                bytes(protected_aes_key),
+                                bytes(protected_aes_key.data),
                                 padding.OAEP(
                                     mgf=padding.MGF1(algorithm=hashes.SHA256()),
                                     algorithm=hashes.SHA256(),
@@ -556,14 +556,14 @@ class SecureCompletionClient:
             # Use secure memory to protect AES key and decrypted plaintext
             if _SECURE_MEMORY_AVAILABLE:
                 # Protect AES key in memory
-                with secure_bytes(bytearray(aes_key)) as protected_aes_key:
+                with secure_bytearray(aes_key) as protected_aes_key:
                     # Decrypt payload with AES-GCM using Cipher API
                     ciphertext = base64.b64decode(package["encrypted_payload"]["ciphertext"])
                     nonce = base64.b64decode(package["encrypted_payload"]["nonce"])
                     tag = base64.b64decode(package["encrypted_payload"]["tag"])
 
                     cipher = Cipher(
-                        algorithms.AES(bytes(protected_aes_key)),
+                        algorithms.AES(bytes(protected_aes_key.data)),
                         modes.GCM(nonce, tag),
                         backend=default_backend()
                     )
@@ -571,9 +571,9 @@ class SecureCompletionClient:
                     plaintext = decryptor.update(ciphertext) + decryptor.finalize()
 
                     # Protect decrypted plaintext in memory
-                    with secure_bytes(bytearray(plaintext)) as protected_plaintext:
+                    with secure_bytearray(plaintext) as protected_plaintext:
                         # Parse decrypted response
-                        response = json.loads(bytes(protected_plaintext).decode('utf-8'))
+                        response = json.loads(bytes(protected_plaintext.data).decode('utf-8'))
                     # Plaintext automatically zeroed here
 
                 # AES key automatically zeroed here

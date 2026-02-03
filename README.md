@@ -30,6 +30,7 @@ async def main():
         messages=[
             {"role": "user", "content": "Hello! How are you today?"}
         ],
+        security_tier="standard", #optional: standard, high or maximum
         temperature=0.7
     )
 
@@ -156,6 +157,7 @@ async def main():
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "What is the capital of France?"}
         ],
+        security_tier="standard", #optional: standard, high or maximum
         temperature=0.7
     )
 
@@ -167,6 +169,7 @@ asyncio.run(main())
 ### With Tools
 
 ```python
+
 import asyncio
 from nomyo import SecureChatCompletion
 
@@ -194,6 +197,7 @@ async def main():
                 }
             }
         ],
+        security_tier="standard", #optional: standard, high or maximum
         temperature=0.7
     )
 

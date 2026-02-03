@@ -20,7 +20,9 @@ try:
         get_memory_protection_info,
         disable_secure_memory,
         enable_secure_memory,
-        secure_bytes
+        secure_bytearray,
+        secure_bytes,  # Deprecated, use secure_bytearray instead
+        SecureBuffer
     )
 except ImportError:
     pass
@@ -36,7 +38,9 @@ __all__ = [
     'get_memory_protection_info',
     'disable_secure_memory',
     'enable_secure_memory',
-    'secure_bytes'
+    'secure_bytearray',
+    'secure_bytes',  # Deprecated, use secure_bytearray instead
+    'SecureBuffer'
 ]
 
 __version__ = "0.1.0"
