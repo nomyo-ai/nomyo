@@ -58,6 +58,34 @@ The client can use secure memory protection to:
 
 ## Security Best Practices
 
+### Handle Responses with Minimal Lifetime
+
+The library protects all intermediate crypto material (AES keys, raw plaintext bytes) in secure memory and zeros it immediately after use. However, the **final parsed response dict is returned to you** — and your code is responsible for minimizing how long it lives in memory.
+
+This matters because the *response* is new data you didn't have before: a confidential analysis, PHI summary, or business-critical output. The longer it lives as a reachable Python object, the larger the exposure window from swap files, core dumps, memory inspection, or GC delay.
+
+```python
+# GOOD — extract what you need, then delete the response
+response = await client.create(
+    model="Qwen/Qwen3-0.6B",
+    messages=[{"role": "user", "content": "Summarise patient record #1234"}],
+    security_tier="maximum"
+)
+reply = response["choices"][0]["message"]["content"]
+del response  # drop the full dict immediately
+
+# ... use reply ...
+del reply     # drop when done
+
+# BAD — holding the full response dict longer than needed
+response = await client.create(...)
+# ... many lines of unrelated code ...
+# response still reachable in memory the entire time
+text = response["choices"][0]["message"]["content"]
+```
+
+> **Note:** Python's `del` removes the reference and allows the GC to reclaim memory sooner, but does not zero the underlying bytes. For maximum protection (PHI, classified data), process the response and discard it as quickly as possible — do not store it in long-lived objects, class attributes, or logs.
+
 ### For Production Use
 
 1. **Always use password protection** for private keys

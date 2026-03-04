@@ -29,7 +29,13 @@ async def main():
         temperature=0.7
     )
 
-    print(response['choices'][0]['message']['content'])
+    # Extract what you need, then delete the response dict immediately.
+    # This minimises the time decrypted data lives in process memory
+    # (reduces exposure from swap files, core dumps, or memory inspection).
+    reply = response['choices'][0]['message']['content']
+    del response
+
+    print(reply)
 
 asyncio.run(main())
 ```
