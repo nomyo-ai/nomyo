@@ -77,7 +77,7 @@ class SecureCompletionClient:
     - Response parsing
     """
 
-    def __init__(self, router_url: str = "https://api.nomyo.ai:12434", allow_http: bool = False):
+    def __init__(self, router_url: str = "https://api.nomyo.ai:12435", allow_http: bool = False):
         """
         Initialize the secure completion client.
 
@@ -106,37 +106,37 @@ class SecureCompletionClient:
 
     def _protect_private_key(self) -> None:
         """
-        Attempt to lock private key in memory (best effort).
-        
-        Note: Due to Python's memory management and the cryptography library's
-        internal handling of key material, this provides limited protection.
-        The main benefit is defense-in-depth and signaling security intent.
-        
+        Best-effort attempt to prevent key pages from being swapped to disk.
+
+        Note: The cryptography library uses OpenSSL's own memory allocator for
+        the actual key material, which cannot be directly locked from Python.
+        This method exports the key to a DER bytearray, locks that page, then
+        immediately zeros and discards the copy. It does not protect OpenSSL's
+        internal representation, but serves as a defense-in-depth measure.
+
         For maximum security:
         - Use password-protected key files
-        - Rotate keys regularly  
+        - Rotate keys regularly
         - Store keys outside the project directory in production
         """
         if not _SECURE_MEMORY_AVAILABLE or not self.private_key:
             return
-        
+
         try:
-            # Attempt to lock the key object in memory
-            # Note: This is best-effort as the cryptography library
-            # maintains its own internal key material
-            import pickle
-            key_data = bytearray(pickle.dumps(self.private_key))
+            key_der = bytearray(self.private_key.private_bytes(
+                encoding=serialization.Encoding.DER,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
             secure_memory = _get_secure_memory()
-            locked = secure_memory.lock_memory(key_data)
-            if locked:
-                logger.debug("Private key locked in memory (best effort)")
-            else:
-                logger.debug("Could not lock private key in memory")
+            locked = secure_memory.lock_memory(key_der)
+            logger.debug("Private key page lock: %s", "success" if locked else "unavailable")
+            secure_memory.zero_memory(key_der)
         except Exception as e:
-            logger.debug(f"Private key protection unavailable: {e}")
+            logger.debug("Private key protection unavailable: %s", e)
 
 
-    async def generate_keys(self, save_to_file: bool = False, key_dir: str = "client_keys", password: Optional[str] = None) -> None:
+    def generate_keys(self, save_to_file: bool = False, key_dir: str = "client_keys", password: Optional[str] = None) -> None:
         """
         Generate RSA key pair for secure communication.
 
@@ -211,7 +211,7 @@ class SecureCompletionClient:
 
             logger.debug("Keys saved to %s/", key_dir)
 
-    async def load_keys(self, private_key_path: str, public_key_path: Optional[str] = None, password: Optional[str] = None) -> None:
+    def load_keys(self, private_key_path: str, public_key_path: Optional[str] = None, password: Optional[str] = None) -> None:
         """
         Load RSA keys from files.
 
@@ -226,27 +226,16 @@ class SecureCompletionClient:
         with open(private_key_path, "rb") as f:
             private_pem = f.read()
 
-        # Try different password options
-        password_options = []
-        if password:
-            password_options.append(password.encode('utf-8'))
-        password_options.append(None)  # Try without password
-
-        last_error = None
-        for pwd in password_options:
-            try:
-                self.private_key = serialization.load_pem_private_key(
-                    private_pem,
-                    password=pwd,
-                    backend=default_backend()
-                )
-                logger.debug("Private key loaded %s", 'with password' if pwd else 'without password')
-                break
-            except Exception as e:
-                last_error = e
-                continue
-        else:
-            raise ValueError(f"Failed to load private key. Tried all password options. Error: {last_error}")
+        password_bytes = password.encode('utf-8') if password else None
+        try:
+            self.private_key = serialization.load_pem_private_key(
+                private_pem,
+                password=password_bytes,
+                backend=default_backend()
+            )
+            logger.debug("Private key loaded %s", 'with password' if password_bytes else 'without password')
+        except Exception as e:
+            raise ValueError(f"Failed to load private key: {e}")
 
         # Get public key
         public_key = self.private_key.public_key()
@@ -550,7 +539,9 @@ class SecureCompletionClient:
         if missing_payload_fields:
             raise ValueError(f"Missing fields in encrypted_payload: {', '.join(missing_payload_fields)}")
 
-        # Decrypt with proper error handling
+        # Decrypt with proper error handling — keep crypto errors opaque (timing attacks)
+        plaintext_json: Optional[str] = None
+        plaintext_size: int = 0
         try:
             # Decrypt AES key with private key
             encrypted_aes_key = base64.b64decode(package["encrypted_aes_key"])
@@ -565,9 +556,7 @@ class SecureCompletionClient:
 
             # Use secure memory to protect AES key and decrypted plaintext
             if _SECURE_MEMORY_AVAILABLE:
-                # Protect AES key in memory
                 with secure_bytearray(aes_key) as protected_aes_key:
-                    # Decrypt payload with AES-GCM using Cipher API
                     ciphertext = base64.b64decode(package["encrypted_payload"]["ciphertext"])
                     nonce = base64.b64decode(package["encrypted_payload"]["nonce"])
                     tag = base64.b64decode(package["encrypted_payload"]["tag"])
@@ -578,20 +567,15 @@ class SecureCompletionClient:
                         backend=default_backend()
                     )
                     decryptor = cipher.decryptor()
-                    plaintext = decryptor.update(ciphertext) + decryptor.finalize()
+                    plaintext_bytes = decryptor.update(ciphertext) + decryptor.finalize()
+                    plaintext_size = len(plaintext_bytes)
 
-                    # Protect decrypted plaintext in memory
-                    with secure_bytearray(plaintext) as protected_plaintext:
-                        # Parse decrypted response
-                        response = json.loads(bytes(protected_plaintext.data).decode('utf-8'))
-                    # Plaintext automatically zeroed here
-
+                    with secure_bytearray(plaintext_bytes) as protected_plaintext:
+                        plaintext_json = bytes(protected_plaintext.data).decode('utf-8')
+                    del plaintext_bytes  # drop immutable bytes ref; secure copy already zeroed
                 # AES key automatically zeroed here
             else:
-                # Fallback if secure memory not available
                 logger.warning("Secure memory not available, using standard decryption")
-                
-                # Decrypt payload with AES-GCM using Cipher API
                 ciphertext = base64.b64decode(package["encrypted_payload"]["ciphertext"])
                 nonce = base64.b64decode(package["encrypted_payload"]["nonce"])
                 tag = base64.b64decode(package["encrypted_payload"]["tag"])
@@ -602,14 +586,20 @@ class SecureCompletionClient:
                     backend=default_backend()
                 )
                 decryptor = cipher.decryptor()
-                plaintext = decryptor.update(ciphertext) + decryptor.finalize()
-
-                # Parse decrypted response
-                response = json.loads(plaintext.decode('utf-8'))
+                plaintext_bytes = decryptor.update(ciphertext) + decryptor.finalize()
+                plaintext_size = len(plaintext_bytes)
+                plaintext_json = plaintext_bytes.decode('utf-8')
+                del plaintext_bytes
 
         except Exception:
             # Don't leak specific decryption errors (timing attacks)
             raise SecurityError("Decryption failed: integrity check or authentication failed")
+
+        # Parse JSON outside the crypto exception handler so format errors aren't hidden
+        try:
+            response = json.loads(plaintext_json)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ValueError(f"Decrypted response is not valid JSON: {e}")
 
         # Add metadata for debugging
         if "_metadata" not in response:
@@ -622,7 +612,7 @@ class SecureCompletionClient:
         })
 
         logger.debug("Response decrypted successfully")
-        logger.debug("Response size: %d bytes", len(plaintext))
+        logger.debug("Response size: %d bytes", plaintext_size)
 
         return response
 
@@ -788,13 +778,15 @@ class SecureCompletionClient:
 
                 else:
                     # Unexpected status code
-                    unexp_detail = response.json()
-                    if not isinstance(unexp_detail, dict):
-                        unexp_detail = {"detail": "unknown"}
-                    if isinstance(unexp_detail, dict) and "detail" not in unexp_detail.keys():
-                        unexp_detail["detail"] = "unknown"
+                    try:
+                        unexp_detail = response.json()
+                        if not isinstance(unexp_detail, dict):
+                            unexp_detail = {"detail": "unknown"}
+                        detail_msg = unexp_detail.get("detail", "unknown")
+                    except (json.JSONDecodeError, ValueError):
+                        detail_msg = "unknown"
                     raise APIError(
-                        f"Unexpected status code: {response.status_code} {unexp_detail['detail']}",
+                        f"Unexpected status code: {response.status_code} {detail_msg}",
                         status_code=response.status_code
                     )
 

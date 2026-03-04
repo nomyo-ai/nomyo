@@ -47,6 +47,6 @@ __all__ = [
     'SecureBuffer'
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __author__ = "NOMYO AI"
 __license__ = "Apache-2.0"

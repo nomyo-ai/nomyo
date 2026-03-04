@@ -1,10 +1,11 @@
+import os
 import uuid
 from typing import Dict, Any, List, Optional
-from .SecureCompletionClient import SecureCompletionClient, APIError, AuthenticationError, InvalidRequestError, APIConnectionError, RateLimitError, ServerError
+from .SecureCompletionClient import SecureCompletionClient
 
 # Import secure memory module for configuration
 try:
-    from .SecureMemory import get_memory_protection_info, disable_secure_memory, enable_secure_memory
+    from .SecureMemory import disable_secure_memory, enable_secure_memory
     _SECURE_MEMORY_AVAILABLE = True
 except ImportError:
     _SECURE_MEMORY_AVAILABLE = False
@@ -27,7 +28,7 @@ class SecureChatCompletion:
     Usage:
         ```python
         # Create a client instance
-        client = SecureChatCompletion(base_url="http://api.nomyo.ai:12434")
+        client = SecureChatCompletion(base_url="https://api.nomyo.ai:12435")
 
         # Simple chat completion
         response = await client.create(
@@ -50,7 +51,7 @@ class SecureChatCompletion:
         ```
     """
 
-    def __init__(self, base_url: str = "https://api.nomyo.ai", allow_http: bool = False, api_key: Optional[str] = None, secure_memory: bool = True):
+    def __init__(self, base_url: str = "https://api.nomyo.ai:12435", allow_http: bool = False, api_key: Optional[str] = None, secure_memory: bool = True, key_dir: Optional[str] = None):
         """
         Initialize the secure chat completion client.
 
@@ -64,11 +65,14 @@ class SecureChatCompletion:
                           When enabled, prevents plaintext payloads from being swapped to disk
                           and guarantees memory is zeroed after encryption.
                           Set to False for testing or when security is not required.
+            key_dir: Directory to load/save RSA keys. If None, ephemeral keys are
+                     generated in memory for this session only.
         """
-
         self.client = SecureCompletionClient(router_url=base_url, allow_http=allow_http)
         self._keys_initialized = False
         self.api_key = api_key
+        self._key_dir = key_dir
+        self._secure_memory_enabled = secure_memory
 
         # Configure secure memory if available
         if _SECURE_MEMORY_AVAILABLE:
@@ -85,17 +89,22 @@ class SecureChatCompletion:
                 stacklevel=2
             )
 
-    async def _ensure_keys(self):
+    def _ensure_keys(self):
         """Ensure keys are loaded or generated."""
-        if not self._keys_initialized:
-            # Try to load existing keys
+        if self._keys_initialized:
+            return
+        if self._key_dir is not None:
+            private_key_path = os.path.join(self._key_dir, "private_key.pem")
+            public_key_path = os.path.join(self._key_dir, "public_key.pem")
             try:
-                await self.client.load_keys("client_keys/private_key.pem", "client_keys/public_key.pem")
+                self.client.load_keys(private_key_path, public_key_path)
                 self._keys_initialized = True
+                return
             except Exception:
-                # Generate new keys if loading fails
-                await self.client.generate_keys()
-                self._keys_initialized = True
+                self.client.generate_keys(save_to_file=True, key_dir=self._key_dir)
+        else:
+            self.client.generate_keys()
+        self._keys_initialized = True
 
     async def create(self, model: str, messages: List[Dict[str, Any]], **kwargs) -> Dict[str, Any]:
         """
@@ -157,36 +166,36 @@ class SecureChatCompletion:
             ConnectionError: If the connection to the router fails.
             Exception: For other errors during the request.
         """
-        # Extract base_url if provided (OpenAI compatibility)
+        # Extract non-payload kwargs before building the payload dict
         base_url = kwargs.pop("base_url", None)
-        
-        # Extract security_tier if provided
         security_tier = kwargs.pop("security_tier", None)
+        api_key_override = kwargs.pop("api_key", None)
 
         # Use the instance's client unless base_url is explicitly overridden
         if base_url is not None:
-            # Create a temporary client with overridden base_url
-            temp_client = type(self)(base_url=base_url)
+            temp_client = type(self)(
+                base_url=base_url,
+                allow_http=self.client.allow_http,
+                api_key=self.api_key,
+                secure_memory=self._secure_memory_enabled,
+                key_dir=self._key_dir,
+            )
             instance = temp_client
         else:
-            # Use the instance's existing client
             instance = self
 
-        # Ensure keys are available
-        await instance._ensure_keys()
+        # Ensure keys are available (synchronous)
+        instance._ensure_keys()
 
-        # Prepare payload in OpenAI format
+        # Build payload — api_key is intentionally excluded (sent as Bearer header)
         payload = {
             "model": model,
             "messages": messages,
             **kwargs
         }
 
-        # Generate a unique payload ID
-        payload_id = f"{uuid.uuid4()}"
-
-        # Use instance's api_key if not overridden in kwargs
-        request_api_key = kwargs.pop("api_key", instance.api_key)
+        payload_id = str(uuid.uuid4())
+        request_api_key = api_key_override if api_key_override is not None else instance.api_key
 
         # Send secure request with security tier
         response = await instance.client.send_secure_request(payload, payload_id, request_api_key, security_tier)
