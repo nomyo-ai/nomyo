@@ -10,8 +10,10 @@ from .SecureCompletionClient import (
     AuthenticationError,
     InvalidRequestError,
     APIConnectionError,
+    ForbiddenError,
     RateLimitError,
-    ServerError
+    ServerError,
+    ServiceUnavailableError
 )
 
 # Import secure memory module if available
@@ -33,8 +35,10 @@ __all__ = [
     'AuthenticationError',
     'InvalidRequestError',
     'APIConnectionError',
+    'ForbiddenError',
     'RateLimitError',
     'ServerError',
+    'ServiceUnavailableError',
     'get_memory_protection_info',
     'disable_secure_memory',
     'enable_secure_memory',

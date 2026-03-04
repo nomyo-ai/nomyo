@@ -51,9 +51,19 @@ class RateLimitError(APIError):
     def __init__(self, message: str, status_code: int = 429, error_details: Optional[Dict[str, Any]] = None):
         super().__init__(message, status_code, error_details)
 
+class ForbiddenError(APIError):
+    """Raised when access is forbidden (HTTP 403), e.g. model not allowed for the requested security tier."""
+    def __init__(self, message: str, status_code: int = 403, error_details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, status_code, error_details)
+
 class ServerError(APIError):
     """Raised when the server returns an error (HTTP 500)."""
     def __init__(self, message: str, status_code: int = 500, error_details: Optional[Dict[str, Any]] = None):
+        super().__init__(message, status_code, error_details)
+
+class ServiceUnavailableError(APIError):
+    """Raised when the inference backend is unavailable (HTTP 503)."""
+    def __init__(self, message: str, status_code: int = 503, error_details: Optional[Dict[str, Any]] = None):
         super().__init__(message, status_code, error_details)
 
 class SecureCompletionClient:
@@ -716,6 +726,18 @@ class SecureCompletionClient:
                     except (json.JSONDecodeError, ValueError):
                         raise AuthenticationError("Invalid API key or authentication failed")
 
+                elif response.status_code == 403:
+                    # Forbidden - model not allowed for security tier
+                    try:
+                        error = response.json()
+                        raise ForbiddenError(
+                            f"Forbidden: {error.get('detail', 'Model not allowed for the requested security tier')}",
+                            status_code=403,
+                            error_details=error
+                        )
+                    except (json.JSONDecodeError, ValueError):
+                        raise ForbiddenError("Forbidden: Model not allowed for the requested security tier")
+
                 elif response.status_code == 404:
                     # Endpoint not found
                     try:
@@ -752,6 +774,18 @@ class SecureCompletionClient:
                     except (json.JSONDecodeError, ValueError):
                         raise ServerError("Server error: Internal server error")
 
+                elif response.status_code == 503:
+                    # Service unavailable - inference backend is down
+                    try:
+                        error = response.json()
+                        raise ServiceUnavailableError(
+                            f"Service unavailable: {error.get('detail', 'Inference backend is unavailable')}",
+                            status_code=503,
+                            error_details=error
+                        )
+                    except (json.JSONDecodeError, ValueError):
+                        raise ServiceUnavailableError("Service unavailable: Inference backend is unavailable")
+
                 else:
                     # Unexpected status code
                     unexp_detail = response.json()
@@ -766,7 +800,7 @@ class SecureCompletionClient:
 
         except httpx.NetworkError as e:
             raise APIConnectionError(f"Failed to connect to router: {e}")
-        except (SecurityError, APIError, AuthenticationError, InvalidRequestError, RateLimitError, ServerError, APIConnectionError):
+        except (SecurityError, APIError, AuthenticationError, InvalidRequestError, ForbiddenError, RateLimitError, ServerError, ServiceUnavailableError, APIConnectionError):
             raise  # Re-raise known exceptions
         except Exception as e:
             raise Exception(f"Request failed: {e}")
